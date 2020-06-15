@@ -1,0 +1,134 @@
+---
+title: "crime data exploration"
+output:
+  html_document: default
+  pdf_document: default
+  word_document: default
+---
+
+
+## Read in Dataset
+
+```{r}
+setwd("/Users/Kate/Documents/govhack_crime_data")
+getwd()
+df = read.table("Crime_Mapper_2002_2006.csv", sep= ",", header = TRUE)
+```
+
+## Take a look at the Dataset
+
+```{r}
+head(df)
+ncol(df)
+nrow(df)
+summary(df)
+```
+
+## Subset the data to only 2006
+
+```{r}
+df2006 = df[ df$repyear=="2006",]
+head(df2006)
+```
+
+## Calculate the term frequency
+
+```{r}
+dffreq = cbind(df2006[, 1:3], ((df2006[,5:44])/(df2006[,4])))
+
+```
+
+## Calculate the document frequency
+
+```{r}
+dfdoc = colSums(df2006[,5:44]>0, na.rm =TRUE)
+
+```
+
+
+## Calculate the TFIDF
+
+```{r}
+tfidf = cbind(dffreq[, 1:3], (dffreq[,4:43]/dfdoc))
+
+```
+
+## Calculate the crime with the highest TF-IDF score for each location
+
+```{r}
+tfidf$maxcol = colnames(tfidf[,4:42])[apply(tfidf[,4:42],1,which.max)]
+##tfidf$maxmotor = colnames(tfidf[,36:41])[apply(tfidf[,36:41],1,which.max)]
+
+```
+
+
+## Export dataset for visualisation
+
+```{r}
+##write.csv(tfidf, "tfidfcrimedata.csv")
+```
+
+#Now to map the data:
+
+##Read in data to join LGA to Zips
+
+```{r}
+postcode = read.table("postcode.csv", sep= ",", header = TRUE)
+postcode$POSTCODE = sprintf("%04d", postcode$POSTCODE)
+lga = read.table("lganoextracommas.csv", sep= ",", header = TRUE)
+```
+
+##merge zipcode and lga datasets
+
+```{r}
+postlga = merge(postcode, lga, by=c("SA2_MAINCODE_2011"))
+```
+
+##merge the zipcode data to the crime data by lga
+
+```{r}
+geocodedcrime = merge(postlga, tfidf, by.x=c("LGA_CODE_2011"), by.y=c("lganum"))
+##left pad the zip codes so that the preceding 0s are no longer dropped
+##geocodedcrime$POSTCODE = sprintf("%04d", geocodedcrime$POSTCODE)
+```
+
+##write the geocoded data to csv
+
+```{r}
+write.csv(geocodedcrime, "geocodedcrimedataSA.csv")
+
+```
+
+##transform the dataset from wide to tall format for an overall frequency map
+
+```{r}
+library(tidyr)
+data_long <- gather(geocodedcrime, crime, frequency, O1.Against.person:O8.Other.offences, factor_key=TRUE)
+data_long
+```
+
+##write transformed data to csv
+
+```{r}
+write.csv(data_long, "geocodedcrimedataSAlong.csv") 
+```
+
+
+
+#Now prepare the raw frequency data for the comparison map
+
+## Calculate the crime with the highest frequency score in each location
+
+```{r}
+dffreq$maxcol = colnames(dffreq[,4:42])[apply(dffreq[,4:42],1,which.max)]
+##dffreq$maxmotor = colnames(dffreq[,36:41])[apply(dffreq[,36:41],1,which.max)]
+
+```
+
+##Now geocode the raw frequency data
+
+```{r}
+geocodedfreq = merge(postlga, dffreq, by.x=c("LGA_CODE_2011"), by.y=c("lganum"))
+write.csv(geocodedfreq, "geocodedcrimefrequencydataSA.csv")
+
+```
